@@ -276,6 +276,67 @@ canvas{max-height:200px;}
   <div id="tradeList"></div>
 </div>
 
+<!-- ===== STOCKS PORTFOLIO ===== -->
+<div class="page" id="page-stocks">
+  <div class="hdr"><h1>Stock Portfolio</h1><div class="streak" id="portTotal">$0</div></div>
+
+  <!-- Portfolio Hero -->
+  <div class="hero" id="portHero">
+    <div class="h-label">Total Portfolio Value</div>
+    <div class="h-amount pos" id="portValue">$0</div>
+    <div class="h-row">
+      <span id="portPnl">P&L: $0</span>
+      <span id="portPct">0%</span>
+    </div>
+  </div>
+
+  <!-- Projections -->
+  <div class="card">
+    <h3>Portfolio Projections</h3>
+    <div class="sgrid" style="grid-template-columns:1fr 1fr;">
+      <div class="scard"><div class="sl">Dec 2026</div><div class="sv" style="color:var(--green);" id="projDec26">$0</div></div>
+      <div class="scard"><div class="sl">Oct 2027</div><div class="sv" style="color:var(--green);" id="projOct27">$0</div></div>
+    </div>
+    <div class="sgrid" style="grid-template-columns:1fr 1fr;">
+      <div class="scard"><div class="sl">Dec 2026 Gain</div><div class="sv" style="color:var(--green);" id="projDec26Gain">$0</div></div>
+      <div class="scard"><div class="sl">Oct 2027 Gain</div><div class="sv" style="color:var(--green);" id="projOct27Gain">$0</div></div>
+    </div>
+  </div>
+
+  <!-- Stock table -->
+  <div class="card">
+    <h3>Holdings</h3>
+    <div id="stockTable"></div>
+  </div>
+
+  <!-- Add/Edit stock -->
+  <div style="display:flex;gap:8px;margin-bottom:12px;">
+    <button class="save-btn" style="font-size:14px;padding:12px;" onclick="addStock()">+ Add Stock</button>
+  </div>
+
+  <!-- Chart -->
+  <div class="card">
+    <h3>Portfolio Allocation</h3>
+    <canvas id="portChart"></canvas>
+  </div>
+
+  <!-- Options BP note -->
+  <div class="card" style="border-color:rgba(124,107,240,.2);">
+    <h3 style="color:var(--accent2);">Options Trading (Separate)</h3>
+    <div style="display:flex;justify-content:space-between;align-items:center;">
+      <div>
+        <div style="font-size:12px;color:var(--dim);">Buying Power</div>
+        <div style="font-size:22px;font-weight:700;" id="optionsBP">$1,500</div>
+      </div>
+      <div style="text-align:right;">
+        <div style="font-size:12px;color:var(--dim);">Loss Recovery</div>
+        <div style="font-size:22px;font-weight:700;color:var(--red);" id="optionsLoss">-$9,000</div>
+      </div>
+    </div>
+    <div style="font-size:11px;color:var(--dim);margin-top:8px;text-align:center;">Tracked separately in Dashboard tab</div>
+  </div>
+</div>
+
 <!-- ===== RULES ===== -->
 <div class="page" id="page-rules">
   <div class="hdr"><h1>Rules & Plan</h1><div></div></div>
@@ -323,8 +384,9 @@ canvas{max-height:200px;}
 
 <!-- Nav -->
 <div class="bnav">
-  <button class="active" id="nav-dash" onclick="showPage('dash')"><span class="ni">&#9201;</span>Dashboard</button>
-  <button id="nav-add" onclick="showPage('add')"><span class="ni">&#10133;</span>Log Trade</button>
+  <button class="active" id="nav-dash" onclick="showPage('dash')"><span class="ni">&#9201;</span>Dash</button>
+  <button id="nav-add" onclick="showPage('add')"><span class="ni">&#10133;</span>Trade</button>
+  <button id="nav-stocks" onclick="showPage('stocks')"><span class="ni">&#128176;</span>Stocks</button>
   <button id="nav-history" onclick="showPage('history')"><span class="ni">&#128202;</span>History</button>
   <button id="nav-rules" onclick="showPage('rules')"><span class="ni">&#128218;</span>Rules</button>
 </div>
@@ -346,6 +408,17 @@ let state = {
   tradeStyle: 'day',
   refMode: 'day',
   startDate: '2026-04-06',
+  optionsBP: 1500,
+  stocks: [
+    { ticker: 'IREN', shares: 11, avg: 33.60, current: 34.81, targetDec26: 70, targetOct27: 90, color: '#10b981' },
+    { ticker: 'RIVN', shares: 350, avg: 10.32, current: 15.40, targetDec26: 17, targetOct27: 20, color: '#06b6d4' },
+    { ticker: 'SOFI', shares: 200, avg: 14.70, current: 15.85, targetDec26: 25, targetOct27: 30, color: '#7c6bf0' },
+    { ticker: 'SOUN', shares: 650, avg: 10.74, current: 6.75, targetDec26: 12, targetOct27: 15, color: '#f59e0b' },
+    { ticker: 'SMCI', shares: 250, avg: 27.43, current: 23.22, targetDec26: 35, targetOct27: 45, color: '#ef4444' },
+    { ticker: 'URNJ', shares: 25, avg: 34.20, current: 29.05, targetDec26: 42, targetOct27: 50, color: '#22d3ee' },
+    { ticker: 'BBAI', shares: 100, avg: 3.77, current: 3.54, targetDec26: 5, targetOct27: 6, color: '#a78bfa' },
+    { ticker: 'HIVE', shares: 0, avg: 0, current: 1.92, targetDec26: 6, targetOct27: 8, color: '#f472b6' },
+  ],
 };
 
 function load() {
@@ -371,6 +444,7 @@ function showPage(p) {
   document.querySelectorAll('.bnav button').forEach(x => x.classList.remove('active'));
   document.getElementById('nav-' + p).classList.add('active');
   if (p === 'add') resetForm();
+  if (p === 'stocks') renderStocks();
   renderAll();
 }
 
@@ -924,6 +998,162 @@ function editSetting(key) {
 }
 
 function toast(msg) { const t = document.getElementById('toast'); t.innerHTML = msg; t.classList.add('show'); setTimeout(() => t.classList.remove('show'), 2500); }
+
+// ===== STOCK PORTFOLIO =====
+let portChart;
+
+function renderStocks() {
+  const stocks = state.stocks.filter(s => s.shares > 0);
+  const totalInvested = stocks.reduce((s, st) => s + (st.shares * st.avg), 0);
+  const totalCurrent = stocks.reduce((s, st) => s + (st.shares * st.current), 0);
+  const totalPnl = totalCurrent - totalInvested;
+  const totalPnlPct = totalInvested > 0 ? (totalPnl / totalInvested * 100) : 0;
+  const totalDec26 = stocks.reduce((s, st) => s + (st.shares * st.targetDec26), 0);
+  const totalOct27 = stocks.reduce((s, st) => s + (st.shares * st.targetOct27), 0);
+
+  // Hero
+  document.getElementById('portTotal').textContent = fmts(totalCurrent);
+  document.getElementById('portValue').textContent = fmts(totalCurrent);
+  document.getElementById('portValue').className = 'h-amount ' + (totalPnl >= 0 ? 'pos' : 'neg');
+  document.getElementById('portPnl').textContent = `P&L: ${totalPnl >= 0 ? '+' : ''}${fmts(totalPnl)}`;
+  document.getElementById('portPnl').style.color = totalPnl >= 0 ? 'var(--green)' : 'var(--red)';
+  document.getElementById('portPct').textContent = (totalPnlPct >= 0 ? '+' : '') + totalPnlPct.toFixed(1) + '%';
+  document.getElementById('portPct').style.color = totalPnl >= 0 ? 'var(--green)' : 'var(--red)';
+
+  // Projections
+  document.getElementById('projDec26').textContent = fmts(totalDec26);
+  document.getElementById('projOct27').textContent = fmts(totalOct27);
+  document.getElementById('projDec26Gain').textContent = '+' + fmts(totalDec26 - totalCurrent) + ' (' + ((totalDec26 - totalCurrent) / totalCurrent * 100).toFixed(0) + '%)';
+  document.getElementById('projOct27Gain').textContent = '+' + fmts(totalOct27 - totalCurrent) + ' (' + ((totalOct27 - totalCurrent) / totalCurrent * 100).toFixed(0) + '%)';
+
+  // Options BP
+  const optPnl = totalPnL();
+  document.getElementById('optionsBP').textContent = fmts(state.optionsBP + Math.max(0, optPnl));
+  document.getElementById('optionsLoss').textContent = (state.lossToRecover - optPnl) > 0 ? '-' + fmts(state.lossToRecover - optPnl) : 'RECOVERED!';
+  document.getElementById('optionsLoss').style.color = (state.lossToRecover - optPnl) > 0 ? 'var(--red)' : 'var(--green)';
+
+  // Stock table
+  const allStocks = state.stocks;
+  document.getElementById('stockTable').innerHTML = allStocks.map(st => {
+    const invested = st.shares * st.avg;
+    const value = st.shares * st.current;
+    const pnl = value - invested;
+    const pnlPct = invested > 0 ? (pnl / invested * 100) : 0;
+    const dec26Val = st.shares * st.targetDec26;
+    const oct27Val = st.shares * st.targetOct27;
+    const dec26Gain = dec26Val - value;
+    const oct27Gain = oct27Val - value;
+    const isActive = st.shares > 0;
+
+    return `<div style="background:${isActive ? 'var(--card)' : 'var(--bg)'};border:1px solid ${isActive ? 'var(--border)' : 'rgba(30,30,48,.3)'};border-left:3px solid ${st.color};border-radius:10px;padding:12px;margin-bottom:8px;${!isActive ? 'opacity:.5;' : ''}">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+        <div>
+          <span style="font-size:16px;font-weight:700;">${st.ticker}</span>
+          <span style="font-size:11px;color:var(--dim);margin-left:6px;">${st.shares} shares @ $${st.avg.toFixed(2)}</span>
+        </div>
+        <div style="display:flex;gap:6px;">
+          <button onclick="editStock('${st.ticker}')" style="background:var(--bg);border:1px solid var(--border);color:var(--accent2);padding:3px 8px;border-radius:6px;font-size:10px;cursor:pointer;">Edit</button>
+          ${!isActive ? `<button onclick="removeStock('${st.ticker}')" style="background:var(--bg);border:1px solid var(--red);color:var(--red);padding:3px 8px;border-radius:6px;font-size:10px;cursor:pointer;">✕</button>` : ''}
+        </div>
+      </div>
+      ${isActive ? `
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;font-size:11px;">
+        <div style="background:var(--bg);padding:6px;border-radius:6px;text-align:center;">
+          <div style="color:var(--dim);font-size:9px;">NOW</div>
+          <div style="font-weight:600;">$${st.current.toFixed(2)}</div>
+          <div style="color:${pnl>=0?'var(--green)':'var(--red)'};">${pnl>=0?'+':''}${fmts(pnl)}</div>
+          <div style="color:${pnl>=0?'var(--green)':'var(--red)'};">${pnlPct>=0?'+':''}${pnlPct.toFixed(1)}%</div>
+        </div>
+        <div style="background:var(--bg);padding:6px;border-radius:6px;text-align:center;">
+          <div style="color:var(--dim);font-size:9px;">DEC 2026</div>
+          <div style="font-weight:600;color:var(--green);">$${st.targetDec26}</div>
+          <div style="color:var(--green);">+${fmts(dec26Gain)}</div>
+          <div style="color:var(--green);">Val: ${fmts(dec26Val)}</div>
+        </div>
+        <div style="background:var(--bg);padding:6px;border-radius:6px;text-align:center;">
+          <div style="color:var(--dim);font-size:9px;">OCT 2027</div>
+          <div style="font-weight:600;color:var(--cyan);">$${st.targetOct27}</div>
+          <div style="color:var(--cyan);">+${fmts(oct27Gain)}</div>
+          <div style="color:var(--cyan);">Val: ${fmts(oct27Val)}</div>
+        </div>
+      </div>` : '<div style="font-size:11px;color:var(--dim);text-align:center;">No shares — watchlist</div>'}
+    </div>`;
+  }).join('');
+
+  // Portfolio totals row
+  document.getElementById('stockTable').innerHTML += `
+    <div style="background:linear-gradient(135deg,#1a1530,#13131f);border:2px solid var(--accent);border-radius:10px;padding:14px;margin-top:4px;">
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;font-size:12px;">
+        <div style="text-align:center;">
+          <div style="color:var(--dim);font-size:10px;">TOTAL NOW</div>
+          <div style="font-size:18px;font-weight:700;color:${totalPnl>=0?'var(--green)':'var(--red)'};">${fmts(totalCurrent)}</div>
+          <div style="font-size:11px;color:${totalPnl>=0?'var(--green)':'var(--red)'};">${totalPnl>=0?'+':''}${fmts(totalPnl)}</div>
+        </div>
+        <div style="text-align:center;">
+          <div style="color:var(--dim);font-size:10px;">DEC 2026</div>
+          <div style="font-size:18px;font-weight:700;color:var(--green);">${fmts(totalDec26)}</div>
+          <div style="font-size:11px;color:var(--green);">+${fmts(totalDec26-totalCurrent)}</div>
+        </div>
+        <div style="text-align:center;">
+          <div style="color:var(--dim);font-size:10px;">OCT 2027</div>
+          <div style="font-size:18px;font-weight:700;color:var(--cyan);">${fmts(totalOct27)}</div>
+          <div style="font-size:11px;color:var(--cyan);">+${fmts(totalOct27-totalCurrent)}</div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  // Allocation chart
+  if (portChart) portChart.destroy();
+  const activeStocks = stocks.filter(s => s.shares > 0);
+  if (activeStocks.length > 0) {
+    portChart = new Chart(document.getElementById('portChart').getContext('2d'), {
+      type: 'doughnut',
+      data: {
+        labels: activeStocks.map(s => s.ticker),
+        datasets: [{ data: activeStocks.map(s => s.shares * s.current), backgroundColor: activeStocks.map(s => s.color), borderWidth: 2, borderColor: '#13131f' }]
+      },
+      options: { cutout: '65%', responsive: true, maintainAspectRatio: true, plugins: { legend: { display: true, position: 'bottom', labels: { color: '#6b6b88', font: { size: 11 }, padding: 12 } }, tooltip: { callbacks: { label: ctx => ` ${ctx.label}: ${fmts(ctx.raw)} (${(ctx.raw/totalCurrent*100).toFixed(1)}%)` } } } }
+    });
+  }
+}
+
+function editStock(ticker) {
+  const st = state.stocks.find(s => s.ticker === ticker);
+  if (!st) return;
+  const field = prompt(`${ticker} — What to update?\n1 = Shares\n2 = Avg Price\n3 = Current Price\n4 = Dec 2026 Target\n5 = Oct 2027 Target`);
+  if (!field) return;
+  if (field === '1') { const v = prompt('Shares:', st.shares); if (v && !isNaN(v)) { st.shares = +v; } }
+  else if (field === '2') { const v = prompt('Avg Price ($):', st.avg); if (v && !isNaN(v)) { st.avg = +v; } }
+  else if (field === '3') { const v = prompt('Current Price ($):', st.current); if (v && !isNaN(v)) { st.current = +v; } }
+  else if (field === '4') { const v = prompt('Dec 2026 Target ($):', st.targetDec26); if (v && !isNaN(v)) { st.targetDec26 = +v; } }
+  else if (field === '5') { const v = prompt('Oct 2027 Target ($):', st.targetOct27); if (v && !isNaN(v)) { st.targetOct27 = +v; } }
+  save(); renderStocks(); toast(ticker + ' updated');
+}
+
+function addStock() {
+  const ticker = prompt('Ticker (e.g. AAPL):');
+  if (!ticker) return;
+  if (state.stocks.find(s => s.ticker === ticker.toUpperCase())) { toast('Already exists — use Edit'); return; }
+  const shares = prompt('Shares:', '0');
+  const avg = prompt('Avg Price ($):', '0');
+  const current = prompt('Current Price ($):', '0');
+  const dec26 = prompt('Dec 2026 Target ($):', '0');
+  const oct27 = prompt('Oct 2027 Target ($):', '0');
+  const colors = ['#10b981','#ef4444','#f59e0b','#06b6d4','#7c6bf0','#f472b6','#a78bfa','#22d3ee','#fb923c','#84cc16'];
+  state.stocks.push({
+    ticker: ticker.toUpperCase(), shares: +(shares||0), avg: +(avg||0),
+    current: +(current||0), targetDec26: +(dec26||0), targetOct27: +(oct27||0),
+    color: colors[state.stocks.length % colors.length]
+  });
+  save(); renderStocks(); toast(ticker.toUpperCase() + ' added');
+}
+
+function removeStock(ticker) {
+  if (!confirm('Remove ' + ticker + '?')) return;
+  state.stocks = state.stocks.filter(s => s.ticker !== ticker);
+  save(); renderStocks(); toast(ticker + ' removed');
+}
 
 load();
 renderAll();
