@@ -333,12 +333,12 @@ let state = {
   phase: 1,
   maxContracts: 2,
   maxTrades: 2,
-  slPct: 7,
+  slPct: 15,
   tpPct: 12,
-  swingSlPct: 15,
-  swingTpPct: 30,
-  maxDailyLoss: 160,
-  maxWeeklyLoss: 400,
+  swingSlPct: 25,
+  swingTpPct: 40,
+  maxDailyLoss: 200,
+  maxWeeklyLoss: 500,
   tradeType: 'CALL',
   tradeStyle: 'day',
   refMode: 'day',
@@ -855,7 +855,7 @@ function renderRules() {
   document.getElementById('rulesContent').innerHTML = `
     <div class="check-item"><div class="check-dot ok">1</div><b>Max ${phase.contracts} contracts per trade</b></div>
     <div class="check-item"><div class="check-dot ok">2</div><b>Max ${state.maxTrades} trades per day</b></div>
-    <div class="check-item"><div class="check-dot ok">3</div><b>${state.slPct}% stop loss — set IMMEDIATELY on entry</b></div>
+    <div class="check-item"><div class="check-dot ok">3</div><b>${state.slPct}% stop loss day / ${state.swingSlPct}% swing — set IMMEDIATELY</b></div>
     <div class="check-item"><div class="check-dot ok">4</div><b>${state.tpPct}% take profit — follow tip guy's exit</b></div>
     <div class="check-item"><div class="check-dot ok">5</div><b>Contract price $100-$300 only</b></div>
     <div class="check-item"><div class="check-dot ok">6</div><b>NEVER average down</b></div>
