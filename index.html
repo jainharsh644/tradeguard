@@ -148,6 +148,20 @@ canvas{max-height:200px;}
     <div class="streak" id="streakBadge">0 day streak</div>
   </div>
 
+  <!-- Quick Reference FIRST — always visible -->
+  <div class="card" style="border-color:var(--accent);background:linear-gradient(135deg,#13131f,#1a1530);">
+    <h3 style="color:var(--accent2);">Quick Reference — SL & Target</h3>
+    <div class="toggle-row" style="margin-bottom:8px;">
+      <button class="toggle-btn" style="padding:8px;font-size:12px;flex:1;" id="refDay" onclick="setRefMode('day')">Day Trade</button>
+      <button class="toggle-btn" style="padding:8px;font-size:12px;flex:1;" id="refSwing" onclick="setRefMode('swing')">Swing Trade</button>
+    </div>
+    <table class="qtable" id="refTable"></table>
+    <div id="refNote" style="font-size:10px;color:var(--dim);margin-top:8px;text-align:center;"></div>
+  </div>
+
+  <!-- Rules reminder -->
+  <div class="rules-banner" id="rulesBanner">MAX 2 CONTRACTS · MAX 2 TRADES · 7% STOP LOSS</div>
+
   <div class="hero">
     <div class="h-label">Loss Recovery Progress</div>
     <div class="h-amount" id="heroAmount">-$9,000</div>
@@ -169,19 +183,16 @@ canvas{max-height:200px;}
   <!-- Phase -->
   <div class="phase-bar" id="phaseBar"></div>
 
-  <!-- Rules reminder -->
-  <div class="rules-banner" id="rulesBanner">MAX 2 CONTRACTS · MAX 2 TRADES · 7% STOP LOSS</div>
+  <!-- Open swing trades -->
+  <div class="card" id="openSwingsCard" style="display:none;">
+    <h3 style="color:var(--cyan);">Open Swing Trades</h3>
+    <div id="openSwingsList"></div>
+  </div>
 
   <!-- Pre-trade checklist -->
   <div class="card">
     <h3>Pre-Trade Checklist</h3>
     <div class="checklist" id="checklist"></div>
-  </div>
-
-  <!-- Quick reference -->
-  <div class="card">
-    <h3>Quick Reference — SL & Target by Entry</h3>
-    <table class="qtable" id="refTable"></table>
   </div>
 
   <!-- Weekly P&L -->
@@ -200,6 +211,12 @@ canvas{max-height:200px;}
 <div class="page" id="page-add">
   <div class="hdr"><h1>Log Trade</h1><div></div></div>
 
+  <!-- Day / Swing toggle -->
+  <div class="toggle-row">
+    <button class="toggle-btn active" id="btnDay" onclick="setTradeStyle('day')" style="background:rgba(124,107,240,.1);color:var(--accent2);border-color:var(--accent);">Day Trade</button>
+    <button class="toggle-btn" id="btnSwing" onclick="setTradeStyle('swing')">Swing Trade</button>
+  </div>
+
   <div class="toggle-row">
     <button class="toggle-btn call active" id="btnCall" onclick="setTradeType('CALL')">CALL</button>
     <button class="toggle-btn put" id="btnPut" onclick="setTradeType('PUT')">PUT</button>
@@ -212,7 +229,12 @@ canvas{max-height:200px;}
 
   <div class="form-row">
     <div class="form-group"><label>Entry Price ($)</label><input type="number" id="fEntry" placeholder="2.50" inputmode="decimal" step="0.01"></div>
-    <div class="form-group"><label>Exit Price ($)</label><input type="number" id="fExit" placeholder="2.85" inputmode="decimal" step="0.01"></div>
+    <div class="form-group" id="exitGroup"><label>Exit Price ($)</label><input type="number" id="fExit" placeholder="2.85" inputmode="decimal" step="0.01"></div>
+  </div>
+
+  <!-- Swing trade info -->
+  <div id="swingInfo" style="display:none;margin-bottom:12px;padding:10px;background:rgba(6,182,212,.06);border:1px solid rgba(6,182,212,.2);border-radius:8px;font-size:12px;color:var(--cyan);">
+    Leave exit empty to log as OPEN swing. Come back to close it when you exit.
   </div>
 
   <div class="form-row">
@@ -313,9 +335,13 @@ let state = {
   maxTrades: 2,
   slPct: 7,
   tpPct: 12,
+  swingSlPct: 15,
+  swingTpPct: 30,
   maxDailyLoss: 160,
   maxWeeklyLoss: 400,
   tradeType: 'CALL',
+  tradeStyle: 'day',
+  refMode: 'day',
 };
 
 function load() {
@@ -345,7 +371,7 @@ function showPage(p) {
 }
 
 // ===== CALCULATIONS =====
-function totalPnL() { return state.trades.reduce((s, t) => s + t.pnl, 0); }
+function totalPnL() { return state.trades.filter(t => !t.isOpen).reduce((s, t) => s + t.pnl, 0); }
 function todayTrades() {
   const d = new Date().toISOString().split('T')[0];
   return state.trades.filter(t => t.date === d);
@@ -508,19 +534,9 @@ function renderDashboard() {
     `<div class="check-item"><div class="check-dot ${c.ok ? 'ok' : 'fail'}">${c.ok ? '✓' : '✕'}</div>${c.label}</div>`
   ).join('');
 
-  // Quick ref table
-  const entries = [100, 150, 200, 250, 300];
-  document.getElementById('refTable').innerHTML = `
-    <tr><th>Entry</th><th>SL (${state.slPct}%)</th><th>Loss/ct</th><th>TP (${state.tpPct}%)</th><th>Profit/ct</th></tr>
-    ${entries.map(e => {
-      const sl = (e * (1 - state.slPct/100)).toFixed(0);
-      const lossPerCt = (e * state.slPct/100).toFixed(0);
-      const tp = (e * (1 + state.tpPct/100)).toFixed(0);
-      const profPerCt = (e * state.tpPct/100).toFixed(0);
-      const maxExp = e * phase.contracts;
-      return `<tr><td class="b">$${e}</td><td class="r">$${sl}</td><td class="r">-$${lossPerCt}</td><td class="g">$${tp}</td><td class="g">+$${profPerCt}</td></tr>`;
-    }).join('')}
-  `;
+  // Quick ref + open swings
+  setRefMode(state.refMode || 'day');
+  renderOpenSwings();
 
   // Week view
   const days = ['Mon','Tue','Wed','Thu','Fri'];
@@ -579,15 +595,101 @@ function resetForm() {
   document.getElementById('fDate').value = new Date().toISOString().split('T')[0];
   document.getElementById('fNotes').value = '';
   state.tradeType = 'CALL';
+  state.tradeStyle = 'day';
   document.getElementById('btnCall').classList.add('active');
   document.getElementById('btnPut').classList.remove('active');
   document.getElementById('livePreview').style.display = 'none';
+  setTradeStyle('day');
 }
 
 function setTradeType(t) {
   state.tradeType = t;
   document.getElementById('btnCall').classList.toggle('active', t === 'CALL');
   document.getElementById('btnPut').classList.toggle('active', t === 'PUT');
+}
+
+function setTradeStyle(s) {
+  state.tradeStyle = s;
+  document.getElementById('btnDay').classList.toggle('active', s === 'day');
+  document.getElementById('btnDay').style.background = s === 'day' ? 'rgba(124,107,240,.1)' : '';
+  document.getElementById('btnDay').style.color = s === 'day' ? 'var(--accent2)' : 'var(--dim)';
+  document.getElementById('btnDay').style.borderColor = s === 'day' ? 'var(--accent)' : 'var(--border)';
+  document.getElementById('btnSwing').classList.toggle('active', s === 'swing');
+  document.getElementById('btnSwing').style.background = s === 'swing' ? 'rgba(6,182,212,.1)' : '';
+  document.getElementById('btnSwing').style.color = s === 'swing' ? 'var(--cyan)' : 'var(--dim)';
+  document.getElementById('btnSwing').style.borderColor = s === 'swing' ? 'var(--cyan)' : 'var(--border)';
+  document.getElementById('swingInfo').style.display = s === 'swing' ? 'block' : 'none';
+}
+
+function setRefMode(m) {
+  state.refMode = m;
+  document.getElementById('refDay').style.background = m === 'day' ? 'rgba(124,107,240,.1)' : '';
+  document.getElementById('refDay').style.color = m === 'day' ? 'var(--accent2)' : 'var(--dim)';
+  document.getElementById('refDay').style.borderColor = m === 'day' ? 'var(--accent)' : 'var(--border)';
+  document.getElementById('refSwing').style.background = m === 'swing' ? 'rgba(6,182,212,.1)' : '';
+  document.getElementById('refSwing').style.color = m === 'swing' ? 'var(--cyan)' : 'var(--dim)';
+  document.getElementById('refSwing').style.borderColor = m === 'swing' ? 'var(--cyan)' : 'var(--border)';
+  renderRefTable();
+}
+
+function renderRefTable() {
+  const m = state.refMode;
+  const sl = m === 'day' ? state.slPct : state.swingSlPct;
+  const tp = m === 'day' ? state.tpPct : state.swingTpPct;
+  const entries = [100, 150, 200, 250, 300];
+  const phase = getPhase();
+  document.getElementById('refTable').innerHTML = `
+    <tr><th>Entry</th><th>SL (${sl}%)</th><th>Loss/ct</th><th>TP (${tp}%)</th><th>Profit/ct</th></tr>
+    ${entries.map(e => {
+      const slPrice = (e * (1 - sl/100)).toFixed(0);
+      const lossPerCt = (e * sl/100).toFixed(0);
+      const tpPrice = (e * (1 + tp/100)).toFixed(0);
+      const profPerCt = (e * tp/100).toFixed(0);
+      return `<tr><td class="b">$${e}</td><td class="r">$${slPrice}</td><td class="r">-$${lossPerCt}</td><td class="g">$${tpPrice}</td><td class="g">+$${profPerCt}</td></tr>`;
+    }).join('')}
+  `;
+  document.getElementById('refNote').textContent = m === 'day'
+    ? `Day Trade: ${sl}% SL · ${tp}% TP · Exit same day`
+    : `Swing Trade: ${sl}% SL · ${tp}%+ TP · Hold multiple days · Wider stops`;
+}
+
+function getOpenSwings() {
+  return state.trades.filter(t => t.style === 'swing' && t.isOpen);
+}
+
+function closeSwingTrade(id) {
+  const t = state.trades.find(x => x.id === id);
+  if (!t) return;
+  const exit = prompt(`Close ${t.ticker} ${t.type} — Exit price ($):`, '');
+  if (!exit || isNaN(exit) || +exit <= 0) return;
+  t.exit = +exit;
+  t.pnl = (t.exit - t.entry) * 100 * t.contracts;
+  t.pctReturn = ((t.exit - t.entry) / t.entry * 100);
+  t.isOpen = false;
+  t.closeDate = new Date().toISOString().split('T')[0];
+  const lostPct = t.pnl < 0 ? Math.abs(t.pctReturn) : 0;
+  t.slFollowed = t.pnl >= 0 ? true : (t.slSet > 0 && lostPct <= (state.swingSlPct + 3));
+  save();
+  renderAll();
+  toast(`${t.pnl >= 0 ? '&#9989;' : '&#10060;'} ${t.ticker} closed at $${t.exit.toFixed(2)} · ${fmt(t.pnl)}`);
+}
+
+function renderOpenSwings() {
+  const open = getOpenSwings();
+  const card = document.getElementById('openSwingsCard');
+  if (open.length === 0) { card.style.display = 'none'; return; }
+  card.style.display = 'block';
+  document.getElementById('openSwingsList').innerHTML = open.map(t => `
+    <div class="trade-item" style="border-color:rgba(6,182,212,.2);">
+      <div class="ti-side ${t.type.toLowerCase()}">${t.type}</div>
+      <div class="ti-info">
+        <div class="ti-ticker">${t.ticker} <span style="font-size:10px;color:var(--cyan);background:rgba(6,182,212,.12);padding:1px 6px;border-radius:4px;">SWING</span></div>
+        <div class="ti-meta">${t.contracts}ct · Entry $${t.entry.toFixed(2)} · SL $${t.slSet > 0 ? t.slSet.toFixed(2) : 'none'}</div>
+        <div class="ti-meta">Opened ${t.date}</div>
+      </div>
+      <button onclick="closeSwingTrade('${t.id}')" style="padding:8px 14px;border-radius:8px;border:1px solid var(--cyan);background:rgba(6,182,212,.1);color:var(--cyan);font-size:12px;font-weight:600;cursor:pointer;">Close</button>
+    </div>
+  `).join('');
 }
 
 // Live preview
@@ -631,34 +733,42 @@ function saveTrade() {
   const ticker = document.getElementById('fTicker').value.trim().toUpperCase();
   const contracts = parseInt(document.getElementById('fContracts').value);
   const entry = parseFloat(document.getElementById('fEntry').value);
-  const exit = parseFloat(document.getElementById('fExit').value);
+  const exit = parseFloat(document.getElementById('fExit').value) || 0;
   const sl = parseFloat(document.getElementById('fSL').value) || 0;
   const date = document.getElementById('fDate').value;
   const notes = document.getElementById('fNotes').value.trim();
+  const isSwing = state.tradeStyle === 'swing';
 
   if (!ticker) { toast('Enter ticker'); return; }
   if (!entry || entry <= 0) { toast('Enter entry price'); return; }
-  if (!exit || exit <= 0) { toast('Enter exit price'); return; }
+  if (!isSwing && (!exit || exit <= 0)) { toast('Enter exit price'); return; }
   if (!contracts || contracts <= 0) { toast('Enter contracts'); return; }
   if (!date) { toast('Enter date'); return; }
 
-  const pnlPerCt = (exit - entry) * 100;
+  const isOpen = isSwing && exit === 0;
+  const pnlPerCt = isOpen ? 0 : (exit - entry) * 100;
   const pnl = pnlPerCt * contracts;
-  const pctReturn = ((exit - entry) / entry * 100);
-  const slPctActual = sl > 0 ? ((entry - sl) / entry * 100) : 0;
+  const pctReturn = isOpen ? 0 : ((exit - entry) / entry * 100);
+  const slPctUsed = isSwing ? state.swingSlPct : state.slPct;
   const lostPct = pnl < 0 ? Math.abs(pctReturn) : 0;
-  const slFollowedThisTrade = pnl >= 0 ? true : (sl > 0 && lostPct <= (state.slPct + 2));
+  const slFollowedThisTrade = isOpen ? true : (pnl >= 0 ? true : (sl > 0 && lostPct <= (slPctUsed + 3)));
 
   state.trades.push({
     id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
-    ticker, type: state.tradeType, contracts, entry, exit,
+    ticker, type: state.tradeType, contracts, entry, exit: isOpen ? 0 : exit,
     slSet: sl, pnl, pctReturn, date, notes,
-    slFollowed: slFollowedThisTrade, slPctActual,
+    slFollowed: slFollowedThisTrade,
+    style: isSwing ? 'swing' : 'day',
+    isOpen,
     time: Date.now(),
   });
 
   save();
-  toast(`${pnl >= 0 ? '&#9989;' : '&#10060;'} ${ticker} ${fmt(pnl)} logged`);
+  if (isOpen) {
+    toast(`&#128640; ${ticker} swing opened · ${contracts}ct @ $${entry.toFixed(2)}`);
+  } else {
+    toast(`${pnl >= 0 ? '&#9989;' : '&#10060;'} ${ticker} ${fmt(pnl)} logged`);
+  }
   showPage('dash');
 }
 
@@ -697,8 +807,10 @@ function renderHistory() {
         <div class="pnl-val" style="color:${t.pnl>=0?'var(--green)':'var(--red)'};">${fmt(t.pnl)}</div>
         <div class="pnl-pct" style="color:${t.pnl>=0?'var(--green)':'var(--red)'};">${t.pctReturn>=0?'+':''}${t.pctReturn.toFixed(1)}%</div>
         <div class="ti-badges">
-          <span class="badge ${t.pnl>=0?'win':'loss'}">${t.pnl>=0?'WIN':'LOSS'}</span>
-          ${t.slSet > 0 ? `<span class="badge ${t.slFollowed?'sl-ok':'sl-broke'}">${t.slFollowed?'SL OK':'SL BROKE'}</span>` : ''}
+          ${t.isOpen ? '<span class="badge" style="background:rgba(6,182,212,.12);color:var(--cyan);">OPEN</span>' :
+            `<span class="badge ${t.pnl>=0?'win':'loss'}">${t.pnl>=0?'WIN':'LOSS'}</span>`}
+          ${t.style==='swing' ? '<span class="badge" style="background:rgba(6,182,212,.08);color:var(--cyan);">SWING</span>' : ''}
+          ${!t.isOpen && t.slSet > 0 ? `<span class="badge ${t.slFollowed?'sl-ok':'sl-broke'}">${t.slFollowed?'SL OK':'SL BROKE'}</span>` : ''}
         </div>
       </div>
     </div>`;
@@ -782,8 +894,10 @@ function renderRules() {
       ${[
         ['Loss to Recover', 'lossToRecover', state.lossToRecover],
         ['Max Trades/Day', 'maxTrades', state.maxTrades],
-        ['Stop Loss %', 'slPct', state.slPct],
-        ['Take Profit %', 'tpPct', state.tpPct],
+        ['Day Trade SL %', 'slPct', state.slPct],
+        ['Day Trade TP %', 'tpPct', state.tpPct],
+        ['Swing SL %', 'swingSlPct', state.swingSlPct],
+        ['Swing TP %', 'swingTpPct', state.swingTpPct],
         ['Max Daily Loss $', 'maxDailyLoss', state.maxDailyLoss],
         ['Max Weekly Loss $', 'maxWeeklyLoss', state.maxWeeklyLoss],
       ].map(([label, key, val]) => `
