@@ -145,7 +145,10 @@ canvas{max-height:200px;}
 <div class="page active" id="page-dash">
   <div class="hdr">
     <h1>Trade<span>Guard</span></h1>
-    <div class="streak" id="streakBadge">0 day streak</div>
+    <div style="display:flex;gap:6px;align-items:center;">
+      <div class="streak" id="dayCounter">Day 1</div>
+      <div class="streak" id="streakBadge">0 streak</div>
+    </div>
   </div>
 
   <!-- Quick Reference FIRST — always visible -->
@@ -342,6 +345,7 @@ let state = {
   tradeType: 'CALL',
   tradeStyle: 'day',
   refMode: 'day',
+  startDate: '2026-04-06',
 };
 
 function load() {
@@ -436,8 +440,11 @@ function renderDashboard() {
   const phase = getPhase();
   const streak = getStreak();
 
-  // Streak
-  document.getElementById('streakBadge').textContent = streak > 0 ? `${streak} day streak` : 'No streak';
+  // Day counter & streak
+  const startDate = new Date(state.startDate);
+  const dayNum = Math.max(1, Math.floor((new Date() - startDate) / 86400000) + 1);
+  document.getElementById('dayCounter').textContent = `Day ${dayNum}`;
+  document.getElementById('streakBadge').textContent = streak > 0 ? `${streak} streak` : 'No streak';
 
   // Hero
   const heroEl = document.getElementById('heroAmount');
