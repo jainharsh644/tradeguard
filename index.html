@@ -1,0 +1,811 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>TradeGuard — Options Journal</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+:root {
+  --bg:#0a0a12;--card:#13131f;--border:#1e1e30;--text:#e4e4f0;--dim:#6b6b88;
+  --accent:#7c6bf0;--accent2:#a78bfa;--green:#10b981;--red:#ef4444;--orange:#f59e0b;
+  --cyan:#06b6d4;--r:14px;--rs:10px;
+}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text);max-width:480px;margin:0 auto;min-height:100dvh;overflow-x:hidden;}
+
+/* Nav */
+.bnav{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:480px;background:var(--card);border-top:1px solid var(--border);display:flex;z-index:100;padding-bottom:env(safe-area-inset-bottom,0);}
+.bnav button{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;padding:10px 0 8px;background:none;border:none;color:var(--dim);font-size:10px;cursor:pointer;}
+.bnav button.active{color:var(--accent2);}
+.bnav .ni{font-size:20px;line-height:1;}
+
+.page{display:none;padding:16px 16px 80px;}
+.page.active{display:block;}
+
+/* Cards */
+.card{background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:16px;margin-bottom:12px;}
+.card h3{font-size:13px;color:var(--dim);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px;}
+
+/* Header */
+.hdr{display:flex;justify-content:space-between;align-items:center;padding:4px 0 12px;}
+.hdr h1{font-size:20px;font-weight:700;}
+.hdr h1 span{color:var(--red);}
+.hdr .streak{font-size:12px;color:var(--dim);background:var(--card);border:1px solid var(--border);padding:4px 10px;border-radius:8px;}
+
+/* Recovery hero */
+.hero{background:linear-gradient(135deg,#1a1030,#0f1a2e);border:1px solid var(--border);border-radius:var(--r);padding:20px;margin-bottom:12px;position:relative;overflow:hidden;}
+.hero::after{content:'';position:absolute;right:-30px;top:-30px;width:100px;height:100px;border-radius:50%;background:rgba(124,107,240,.08);}
+.hero .h-label{font-size:11px;color:var(--dim);text-transform:uppercase;letter-spacing:.5px;}
+.hero .h-amount{font-size:32px;font-weight:800;margin:4px 0;}
+.hero .h-amount.neg{color:var(--red);}
+.hero .h-amount.pos{color:var(--green);}
+.hero .h-bar-bg{height:8px;background:rgba(255,255,255,.06);border-radius:4px;margin-top:10px;overflow:hidden;}
+.hero .h-bar{height:100%;border-radius:4px;transition:width .5s;}
+.hero .h-row{display:flex;justify-content:space-between;margin-top:6px;font-size:11px;color:var(--dim);}
+
+/* Stats grid */
+.sgrid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:12px;}
+.scard{background:var(--card);border:1px solid var(--border);border-radius:var(--rs);padding:12px;text-align:center;}
+.scard .sl{font-size:10px;color:var(--dim);text-transform:uppercase;letter-spacing:.3px;margin-bottom:4px;}
+.scard .sv{font-size:18px;font-weight:700;}
+
+/* Quick ref table */
+.qtable{width:100%;border-collapse:collapse;font-size:12px;}
+.qtable th{text-align:left;color:var(--dim);font-weight:500;padding:8px 6px;border-bottom:1px solid var(--border);font-size:10px;text-transform:uppercase;}
+.qtable td{padding:8px 6px;border-bottom:1px solid rgba(30,30,48,.5);}
+.qtable .g{color:var(--green);}
+.qtable .r{color:var(--red);}
+.qtable .o{color:var(--orange);}
+.qtable .b{font-weight:600;}
+
+/* Rules banner */
+.rules-banner{background:linear-gradient(135deg,var(--red),#b91c1c);border-radius:var(--r);padding:14px 16px;margin-bottom:12px;font-size:13px;font-weight:600;color:#fff;text-align:center;letter-spacing:.3px;}
+
+/* Phase indicator */
+.phase-bar{display:flex;gap:6px;margin-bottom:12px;}
+.phase-pill{flex:1;padding:10px;border-radius:var(--rs);border:1px solid var(--border);background:var(--card);text-align:center;font-size:11px;color:var(--dim);}
+.phase-pill.active{border-color:var(--accent);background:rgba(124,107,240,.1);color:var(--accent2);}
+.phase-pill .pp-label{font-size:9px;text-transform:uppercase;letter-spacing:.5px;margin-bottom:2px;}
+.phase-pill .pp-val{font-size:15px;font-weight:700;}
+
+/* Add trade form */
+.form-row{display:flex;gap:8px;margin-bottom:12px;}
+.form-group{flex:1;}
+.form-group label{display:block;font-size:10px;color:var(--dim);text-transform:uppercase;letter-spacing:.3px;margin-bottom:4px;}
+.form-group input,.form-group select{width:100%;padding:12px;border-radius:var(--rs);border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:14px;outline:none;}
+.form-group input:focus,.form-group select:focus{border-color:var(--accent);}
+.toggle-row{display:flex;gap:8px;margin-bottom:12px;}
+.toggle-btn{flex:1;padding:12px;border-radius:var(--rs);border:2px solid var(--border);background:transparent;color:var(--dim);font-size:14px;font-weight:600;cursor:pointer;text-align:center;}
+.toggle-btn.call.active{background:rgba(16,185,129,.1);color:var(--green);border-color:var(--green);}
+.toggle-btn.put.active{background:rgba(239,68,68,.1);color:var(--red);border-color:var(--red);}
+.save-btn{width:100%;padding:16px;border-radius:var(--rs);border:none;background:var(--accent);color:#fff;font-size:16px;font-weight:700;cursor:pointer;}
+.save-btn:active{transform:scale(.97);}
+
+/* Trade list */
+.trade-item{background:var(--card);border:1px solid var(--border);border-radius:var(--rs);padding:12px;margin-bottom:8px;display:flex;gap:12px;align-items:center;cursor:pointer;}
+.trade-item:active{transform:scale(.98);}
+.ti-side{width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;}
+.ti-side.call{background:rgba(16,185,129,.12);color:var(--green);}
+.ti-side.put{background:rgba(239,68,68,.12);color:var(--red);}
+.ti-info{flex:1;min-width:0;}
+.ti-ticker{font-size:14px;font-weight:600;}
+.ti-meta{font-size:11px;color:var(--dim);margin-top:2px;}
+.ti-pnl{text-align:right;}
+.ti-pnl .pnl-val{font-size:15px;font-weight:700;}
+.ti-pnl .pnl-pct{font-size:11px;}
+.ti-badges{display:flex;gap:4px;margin-top:3px;justify-content:flex-end;}
+.badge{font-size:9px;padding:2px 6px;border-radius:4px;font-weight:600;}
+.badge.win{background:rgba(16,185,129,.12);color:var(--green);}
+.badge.loss{background:rgba(239,68,68,.12);color:var(--red);}
+.badge.sl-hit{background:rgba(239,68,68,.12);color:var(--red);}
+.badge.sl-ok{background:rgba(16,185,129,.12);color:var(--green);}
+.badge.sl-broke{background:rgba(245,158,11,.12);color:var(--orange);}
+
+/* Checklist */
+.checklist{margin-bottom:12px;}
+.check-item{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border);font-size:13px;}
+.check-item:last-child{border-bottom:none;}
+.check-dot{width:20px;height:20px;border-radius:50%;border:2px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:10px;flex-shrink:0;}
+.check-dot.ok{background:var(--green);border-color:var(--green);color:#fff;}
+.check-dot.fail{background:var(--red);border-color:var(--red);color:#fff;}
+
+/* Weekly view */
+.week-row{display:flex;gap:4px;margin-bottom:8px;}
+.day-cell{flex:1;padding:8px 4px;border-radius:6px;text-align:center;font-size:10px;background:var(--card);border:1px solid var(--border);}
+.day-cell .dc-day{color:var(--dim);margin-bottom:2px;}
+.day-cell .dc-val{font-size:13px;font-weight:700;}
+.day-cell.win{border-color:rgba(16,185,129,.3);}
+.day-cell.loss{border-color:rgba(239,68,68,.3);}
+
+/* Modal */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);backdrop-filter:blur(4px);z-index:200;display:flex;align-items:flex-end;justify-content:center;opacity:0;pointer-events:none;transition:opacity .25s;}
+.modal-overlay.open{opacity:1;pointer-events:auto;}
+.modal{background:var(--card);border-radius:20px 20px 0 0;width:100%;max-width:480px;max-height:90vh;overflow-y:auto;padding:24px 16px 36px;transform:translateY(100%);transition:transform .3s cubic-bezier(.32,.72,0,1);}
+.modal-overlay.open .modal{transform:translateY(0);}
+.modal-handle{width:40px;height:4px;background:var(--border);border-radius:2px;margin:0 auto 16px;}
+
+.toast{position:fixed;bottom:80px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--card);border:1px solid var(--border);color:var(--text);padding:10px 20px;border-radius:10px;font-size:13px;z-index:300;opacity:0;transition:all .3s;pointer-events:none;}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+
+.danger-btn{padding:10px;border-radius:var(--rs);border:1px solid var(--red);background:rgba(239,68,68,.08);color:var(--red);font-size:13px;cursor:pointer;width:100%;margin-top:8px;}
+
+.section-title{font-size:14px;font-weight:600;margin:16px 0 8px;}
+
+.empty{text-align:center;padding:30px;color:var(--dim);font-size:13px;}
+
+canvas{max-height:200px;}
+
+@media(max-width:380px){.sgrid{grid-template-columns:1fr 1fr;}.hero .h-amount{font-size:26px;}}
+</style>
+</head>
+<body>
+
+<!-- ===== DASHBOARD ===== -->
+<div class="page active" id="page-dash">
+  <div class="hdr">
+    <h1>Trade<span>Guard</span></h1>
+    <div class="streak" id="streakBadge">0 day streak</div>
+  </div>
+
+  <div class="hero">
+    <div class="h-label">Loss Recovery Progress</div>
+    <div class="h-amount" id="heroAmount">-$9,000</div>
+    <div class="h-bar-bg"><div class="h-bar" id="heroBar" style="width:0%;background:var(--accent);"></div></div>
+    <div class="h-row">
+      <span id="heroRecovered">$0 recovered</span>
+      <span id="heroETA">ETA: --</span>
+    </div>
+  </div>
+
+  <!-- Today's status -->
+  <div class="card" id="todayCard">
+    <h3>Today</h3>
+    <div id="todayStatus"></div>
+  </div>
+
+  <div class="sgrid" id="statsGrid"></div>
+
+  <!-- Phase -->
+  <div class="phase-bar" id="phaseBar"></div>
+
+  <!-- Rules reminder -->
+  <div class="rules-banner" id="rulesBanner">MAX 2 CONTRACTS · MAX 2 TRADES · 7% STOP LOSS</div>
+
+  <!-- Pre-trade checklist -->
+  <div class="card">
+    <h3>Pre-Trade Checklist</h3>
+    <div class="checklist" id="checklist"></div>
+  </div>
+
+  <!-- Quick reference -->
+  <div class="card">
+    <h3>Quick Reference — SL & Target by Entry</h3>
+    <table class="qtable" id="refTable"></table>
+  </div>
+
+  <!-- Weekly P&L -->
+  <div class="card">
+    <h3>This Week</h3>
+    <div id="weekView"></div>
+  </div>
+
+  <div class="card">
+    <h3>P&L Curve</h3>
+    <canvas id="pnlChart"></canvas>
+  </div>
+</div>
+
+<!-- ===== ADD TRADE ===== -->
+<div class="page" id="page-add">
+  <div class="hdr"><h1>Log Trade</h1><div></div></div>
+
+  <div class="toggle-row">
+    <button class="toggle-btn call active" id="btnCall" onclick="setTradeType('CALL')">CALL</button>
+    <button class="toggle-btn put" id="btnPut" onclick="setTradeType('PUT')">PUT</button>
+  </div>
+
+  <div class="form-row">
+    <div class="form-group"><label>Ticker</label><input type="text" id="fTicker" placeholder="SPY, QQQ, AAPL" style="text-transform:uppercase;"></div>
+    <div class="form-group"><label>Contracts</label><input type="number" id="fContracts" value="2" inputmode="numeric"></div>
+  </div>
+
+  <div class="form-row">
+    <div class="form-group"><label>Entry Price ($)</label><input type="number" id="fEntry" placeholder="2.50" inputmode="decimal" step="0.01"></div>
+    <div class="form-group"><label>Exit Price ($)</label><input type="number" id="fExit" placeholder="2.85" inputmode="decimal" step="0.01"></div>
+  </div>
+
+  <div class="form-row">
+    <div class="form-group"><label>Stop Loss Set At ($)</label><input type="number" id="fSL" placeholder="2.32" inputmode="decimal" step="0.01"></div>
+    <div class="form-group"><label>Date</label><input type="date" id="fDate"></div>
+  </div>
+
+  <div class="form-group" style="margin-bottom:12px;">
+    <label>Notes (optional)</label>
+    <input type="text" id="fNotes" placeholder="Tip guy alert, market conditions..." maxlength="100">
+  </div>
+
+  <!-- Live P&L preview -->
+  <div class="card" id="livePreview" style="display:none;">
+    <div style="display:flex;justify-content:space-between;align-items:center;">
+      <div>
+        <div style="font-size:11px;color:var(--dim);">Estimated P&L</div>
+        <div style="font-size:24px;font-weight:700;" id="previewPnl">$0</div>
+      </div>
+      <div style="text-align:right;">
+        <div style="font-size:11px;color:var(--dim);">Return</div>
+        <div style="font-size:18px;font-weight:600;" id="previewPct">0%</div>
+      </div>
+    </div>
+    <div id="previewWarnings" style="margin-top:8px;"></div>
+  </div>
+
+  <button class="save-btn" onclick="saveTrade()">Save Trade</button>
+  <div style="height:20px;"></div>
+</div>
+
+<!-- ===== HISTORY ===== -->
+<div class="page" id="page-history">
+  <div class="hdr"><h1>History</h1><div class="streak" id="totalTrades">0 trades</div></div>
+  <div class="sgrid" id="historyStats"></div>
+  <div id="tradeList"></div>
+</div>
+
+<!-- ===== RULES ===== -->
+<div class="page" id="page-rules">
+  <div class="hdr"><h1>Rules & Plan</h1><div></div></div>
+
+  <div class="card" style="background:linear-gradient(135deg,#1c0a0a,#1a0a0a);border-color:rgba(239,68,68,.2);">
+    <h3 style="color:var(--red);">The Rules — No Exceptions</h3>
+    <div id="rulesContent"></div>
+  </div>
+
+  <div class="card">
+    <h3>Scaling Plan</h3>
+    <table class="qtable" id="scaleTable"></table>
+  </div>
+
+  <div class="card">
+    <h3>Kill Switch</h3>
+    <div id="killSwitch"></div>
+  </div>
+
+  <div class="card">
+    <h3>Recovery Roadmap</h3>
+    <div id="roadmap"></div>
+  </div>
+
+  <div class="card">
+    <h3>Settings</h3>
+    <div id="settingsContent"></div>
+    <div style="margin-top:12px;">
+      <button class="danger-btn" onclick="if(confirm('Delete ALL trades?')&&confirm('Really?')){state.trades=[];save();renderAll();}">Clear All Trades</button>
+    </div>
+  </div>
+</div>
+
+<!-- Trade Detail Modal -->
+<div class="modal-overlay" id="detailModal">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div id="detailContent"></div>
+    <button class="danger-btn" id="deleteTradeBtn" style="margin-top:12px;">Delete Trade</button>
+    <button style="width:100%;padding:12px;border:none;background:transparent;color:var(--dim);font-size:14px;cursor:pointer;margin-top:8px;" onclick="closeModal()">Close</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<!-- Nav -->
+<div class="bnav">
+  <button class="active" id="nav-dash" onclick="showPage('dash')"><span class="ni">&#9201;</span>Dashboard</button>
+  <button id="nav-add" onclick="showPage('add')"><span class="ni">&#10133;</span>Log Trade</button>
+  <button id="nav-history" onclick="showPage('history')"><span class="ni">&#128202;</span>History</button>
+  <button id="nav-rules" onclick="showPage('rules')"><span class="ni">&#128218;</span>Rules</button>
+</div>
+
+<script>
+let state = {
+  trades: [],
+  lossToRecover: 9000,
+  phase: 1,
+  maxContracts: 2,
+  maxTrades: 2,
+  slPct: 7,
+  tpPct: 12,
+  maxDailyLoss: 160,
+  maxWeeklyLoss: 400,
+  tradeType: 'CALL',
+};
+
+function load() {
+  try {
+    const d = localStorage.getItem('tradeguard_v1');
+    if (d) {
+      const p = JSON.parse(d);
+      Object.assign(state, p);
+    }
+  } catch(e) {}
+}
+function save() {
+  localStorage.setItem('tradeguard_v1', JSON.stringify(state));
+}
+
+function fmt(n) { return (n < 0 ? '-' : '') + '$' + Math.abs(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+function fmts(n) { return (n < 0 ? '-' : '') + '$' + Math.abs(n).toLocaleString('en-US', { maximumFractionDigits: 0 }); }
+
+// ===== NAV =====
+function showPage(p) {
+  document.querySelectorAll('.page').forEach(x => x.classList.remove('active'));
+  document.getElementById('page-' + p).classList.add('active');
+  document.querySelectorAll('.bnav button').forEach(x => x.classList.remove('active'));
+  document.getElementById('nav-' + p).classList.add('active');
+  if (p === 'add') resetForm();
+  renderAll();
+}
+
+// ===== CALCULATIONS =====
+function totalPnL() { return state.trades.reduce((s, t) => s + t.pnl, 0); }
+function todayTrades() {
+  const d = new Date().toISOString().split('T')[0];
+  return state.trades.filter(t => t.date === d);
+}
+function todayPnL() { return todayTrades().reduce((s, t) => s + t.pnl, 0); }
+function weekTrades() {
+  const now = new Date();
+  const mon = new Date(now); mon.setDate(now.getDate() - now.getDay() + 1);
+  const monStr = mon.toISOString().split('T')[0];
+  return state.trades.filter(t => t.date >= monStr);
+}
+function weekPnL() { return weekTrades().reduce((s, t) => s + t.pnl, 0); }
+function winRate() {
+  if (state.trades.length === 0) return 0;
+  return (state.trades.filter(t => t.pnl > 0).length / state.trades.length * 100);
+}
+function avgWin() {
+  const wins = state.trades.filter(t => t.pnl > 0);
+  return wins.length > 0 ? wins.reduce((s, t) => s + t.pnl, 0) / wins.length : 0;
+}
+function avgLoss() {
+  const losses = state.trades.filter(t => t.pnl <= 0);
+  return losses.length > 0 ? losses.reduce((s, t) => s + t.pnl, 0) / losses.length : 0;
+}
+function getPhase() {
+  const total = totalPnL();
+  if (total < 1000) return { num: 1, label: 'Phase 1', contracts: 2, desc: 'Building consistency' };
+  if (total < 3000) return { num: 2, label: 'Phase 2', contracts: 3, desc: 'Scaling up' };
+  return { num: 3, label: 'Phase 3', contracts: 3, desc: 'Full speed' };
+}
+function getStreak() {
+  let streak = 0;
+  const dates = [...new Set(state.trades.map(t => t.date))].sort().reverse();
+  for (const d of dates) {
+    const dayPnl = state.trades.filter(t => t.date === d).reduce((s, t) => s + t.pnl, 0);
+    if (dayPnl > 0) streak++; else break;
+  }
+  return streak;
+}
+function slFollowed() {
+  const withSl = state.trades.filter(t => t.slSet > 0);
+  if (withSl.length === 0) return 100;
+  const followed = withSl.filter(t => {
+    if (t.pnl >= 0) return true;
+    const lostPct = ((t.entry - t.exit) / t.entry) * 100;
+    return lostPct <= (state.slPct + 2);
+  });
+  return (followed.length / withSl.length * 100);
+}
+
+// ===== RENDER ALL =====
+function renderAll() {
+  renderDashboard();
+  renderHistory();
+  renderRules();
+}
+
+function renderDashboard() {
+  const pnl = totalPnL();
+  const remaining = state.lossToRecover - pnl;
+  const pct = Math.max(0, Math.min((pnl / state.lossToRecover) * 100, 100));
+  const phase = getPhase();
+  const streak = getStreak();
+
+  // Streak
+  document.getElementById('streakBadge').textContent = streak > 0 ? `${streak} day streak` : 'No streak';
+
+  // Hero
+  const heroEl = document.getElementById('heroAmount');
+  heroEl.textContent = remaining > 0 ? '-' + fmts(remaining) : '+' + fmts(-remaining);
+  heroEl.className = 'h-amount ' + (remaining > 0 ? 'neg' : 'pos');
+  document.getElementById('heroBar').style.width = pct + '%';
+  document.getElementById('heroBar').style.background = pct > 80 ? 'var(--green)' : 'var(--accent)';
+  document.getElementById('heroRecovered').textContent = fmts(Math.max(0, pnl)) + ' recovered';
+
+  // ETA
+  const weeklyAvg = calcWeeklyAvg();
+  if (weeklyAvg > 0 && remaining > 0) {
+    const weeksLeft = Math.ceil(remaining / weeklyAvg);
+    document.getElementById('heroETA').textContent = `~${weeksLeft} weeks left`;
+  } else if (remaining <= 0) {
+    document.getElementById('heroETA').textContent = 'RECOVERED!';
+  } else {
+    document.getElementById('heroETA').textContent = 'Start trading to see ETA';
+  }
+
+  // Today
+  const tt = todayTrades();
+  const tp = todayPnL();
+  const wp = weekPnL();
+  const todayLosses = tt.filter(t => t.pnl < 0).length;
+  const canTrade = tt.length < state.maxTrades && tp > -state.maxDailyLoss && todayLosses < 2;
+  const todayEl = document.getElementById('todayStatus');
+
+  if (tt.length === 0) {
+    todayEl.innerHTML = `<div style="text-align:center;padding:8px;"><div style="font-size:24px;margin-bottom:6px;">&#9200;</div><div style="color:var(--dim);">No trades today. Max ${state.maxTrades} trades allowed.</div></div>`;
+  } else {
+    let statusMsg = '', statusColor = '';
+    if (!canTrade) {
+      if (todayLosses >= 2) { statusMsg = 'DONE — 2 losses hit. No more trades.'; statusColor = 'var(--red)'; }
+      else if (tp <= -state.maxDailyLoss) { statusMsg = 'DONE — Max daily loss hit. Walk away.'; statusColor = 'var(--red)'; }
+      else { statusMsg = 'DONE — Max trades reached.'; statusColor = 'var(--orange)'; }
+    } else if (tp >= 80) {
+      statusMsg = 'Up ' + fmt(tp) + ' — Consider stopping. You\'re ahead.';
+      statusColor = 'var(--green)';
+    } else {
+      statusMsg = `${tt.length}/${state.maxTrades} trades · P&L: ${fmt(tp)} · ${canTrade ? 'Can trade' : 'DONE'}`;
+      statusColor = tp >= 0 ? 'var(--green)' : 'var(--red)';
+    }
+    todayEl.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+        <div><span style="font-size:22px;font-weight:700;color:${tp>=0?'var(--green)':'var(--red)'};">${fmt(tp)}</span><span style="font-size:12px;color:var(--dim);margin-left:6px;">${tt.length}/${state.maxTrades} trades</span></div>
+        <div style="font-size:12px;color:${statusColor};font-weight:600;max-width:50%;text-align:right;">${canTrade ? '&#9989; Can trade' : '&#128721; STOP'}</div>
+      </div>
+      <div style="font-size:12px;color:${statusColor};padding:8px;background:${statusColor}11;border-radius:6px;text-align:center;">${statusMsg}</div>
+    `;
+  }
+
+  // Weekly guard
+  if (wp <= -state.maxWeeklyLoss) {
+    document.getElementById('rulesBanner').textContent = '&#9888; WEEKLY LOSS LIMIT HIT — NO TRADING UNTIL MONDAY';
+    document.getElementById('rulesBanner').style.background = 'linear-gradient(135deg,#7f1d1d,#991b1b)';
+  } else {
+    const ph = getPhase();
+    document.getElementById('rulesBanner').textContent = `MAX ${ph.contracts} CONTRACTS · MAX ${state.maxTrades} TRADES · ${state.slPct}% STOP LOSS`;
+    document.getElementById('rulesBanner').style.background = 'linear-gradient(135deg,var(--red),#b91c1c)';
+  }
+
+  // Stats
+  document.getElementById('statsGrid').innerHTML = `
+    <div class="scard"><div class="sl">Win Rate</div><div class="sv" style="color:${winRate()>=50?'var(--green)':'var(--red)'};">${winRate().toFixed(0)}%</div></div>
+    <div class="scard"><div class="sl">Avg Win</div><div class="sv" style="color:var(--green);">${fmt(avgWin())}</div></div>
+    <div class="scard"><div class="sl">Avg Loss</div><div class="sv" style="color:var(--red);">${fmt(avgLoss())}</div></div>
+    <div class="scard"><div class="sl">SL Followed</div><div class="sv" style="color:${slFollowed()>=80?'var(--green)':'var(--red)'};">${slFollowed().toFixed(0)}%</div></div>
+    <div class="scard"><div class="sl">This Week</div><div class="sv" style="color:${wp>=0?'var(--green)':'var(--red)'};">${fmt(wp)}</div></div>
+    <div class="scard"><div class="sl">Total P&L</div><div class="sv" style="color:${pnl>=0?'var(--green)':'var(--red)'};">${fmt(pnl)}</div></div>
+  `;
+
+  // Phase
+  const phases = [
+    { label: 'Phase 1', desc: '2 contracts', active: phase.num >= 1 },
+    { label: 'Phase 2', desc: '3 contracts', active: phase.num >= 2 },
+    { label: 'Phase 3', desc: 'Full speed', active: phase.num >= 3 },
+  ];
+  document.getElementById('phaseBar').innerHTML = phases.map(p =>
+    `<div class="phase-pill ${p.active ? 'active' : ''}"><div class="pp-label">${p.label}</div><div class="pp-val">${p.desc}</div></div>`
+  ).join('');
+
+  // Checklist
+  const checks = [
+    { label: 'Stop loss will be set immediately', ok: true },
+    { label: `Max ${phase.contracts} contracts this trade`, ok: true },
+    { label: `Today's trades: ${tt.length}/${state.maxTrades}`, ok: tt.length < state.maxTrades },
+    { label: `Today's P&L: ${fmt(tp)}`, ok: tp > -state.maxDailyLoss },
+    { label: `Week P&L: ${fmt(wp)}`, ok: wp > -state.maxWeeklyLoss },
+    { label: 'Contract price $100-$300 range?', ok: true },
+    { label: 'Following tip guy\'s alert?', ok: true },
+  ];
+  document.getElementById('checklist').innerHTML = checks.map(c =>
+    `<div class="check-item"><div class="check-dot ${c.ok ? 'ok' : 'fail'}">${c.ok ? '✓' : '✕'}</div>${c.label}</div>`
+  ).join('');
+
+  // Quick ref table
+  const entries = [100, 150, 200, 250, 300];
+  document.getElementById('refTable').innerHTML = `
+    <tr><th>Entry</th><th>SL (${state.slPct}%)</th><th>Loss/ct</th><th>TP (${state.tpPct}%)</th><th>Profit/ct</th></tr>
+    ${entries.map(e => {
+      const sl = (e * (1 - state.slPct/100)).toFixed(0);
+      const lossPerCt = (e * state.slPct/100).toFixed(0);
+      const tp = (e * (1 + state.tpPct/100)).toFixed(0);
+      const profPerCt = (e * state.tpPct/100).toFixed(0);
+      const maxExp = e * phase.contracts;
+      return `<tr><td class="b">$${e}</td><td class="r">$${sl}</td><td class="r">-$${lossPerCt}</td><td class="g">$${tp}</td><td class="g">+$${profPerCt}</td></tr>`;
+    }).join('')}
+  `;
+
+  // Week view
+  const days = ['Mon','Tue','Wed','Thu','Fri'];
+  const now = new Date();
+  const mon = new Date(now); mon.setDate(now.getDate() - ((now.getDay() + 6) % 7));
+  document.getElementById('weekView').innerHTML = `<div class="week-row">${days.map((d, i) => {
+    const dt = new Date(mon); dt.setDate(mon.getDate() + i);
+    const ds = dt.toISOString().split('T')[0];
+    const dayTrades = state.trades.filter(t => t.date === ds);
+    const dayPnl = dayTrades.reduce((s, t) => s + t.pnl, 0);
+    const cls = dayTrades.length === 0 ? '' : (dayPnl >= 0 ? 'win' : 'loss');
+    return `<div class="day-cell ${cls}"><div class="dc-day">${d}</div><div class="dc-val" style="color:${dayPnl>=0?'var(--green)':'var(--red)'};">${dayTrades.length>0?fmt(dayPnl):'-'}</div></div>`;
+  }).join('')}</div>`;
+
+  // P&L chart
+  renderPnLChart();
+}
+
+function calcWeeklyAvg() {
+  if (state.trades.length === 0) return 0;
+  const weeks = {};
+  state.trades.forEach(t => {
+    const d = new Date(t.date);
+    const wk = d.toISOString().slice(0, 10);
+    const mon = new Date(d); mon.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+    const key = mon.toISOString().slice(0, 10);
+    weeks[key] = (weeks[key] || 0) + t.pnl;
+  });
+  const vals = Object.values(weeks);
+  return vals.length > 0 ? vals.reduce((a, b) => a + b, 0) / vals.length : 0;
+}
+
+let pnlChart;
+function renderPnLChart() {
+  if (pnlChart) pnlChart.destroy();
+  if (state.trades.length === 0) return;
+  const sorted = [...state.trades].sort((a, b) => a.date.localeCompare(b.date) || a.time - b.time);
+  let cum = 0;
+  const data = sorted.map(t => { cum += t.pnl; return cum; });
+  const labels = sorted.map((t, i) => i + 1);
+  pnlChart = new Chart(document.getElementById('pnlChart').getContext('2d'), {
+    type: 'line',
+    data: { labels, datasets: [{ data, borderColor: cum >= 0 ? '#10b981' : '#ef4444', backgroundColor: cum >= 0 ? 'rgba(16,185,129,.08)' : 'rgba(239,68,68,.08)', fill: true, tension: .3, pointRadius: 2, borderWidth: 2 },
+    { data: labels.map(() => state.lossToRecover), borderColor: '#7c6bf022', borderDash: [5,5], borderWidth: 1, pointRadius: 0 }] },
+    options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { display: false }, tooltip: { backgroundColor: '#13131f', titleColor: '#e4e4f0', bodyColor: '#e4e4f0', callbacks: { label: ctx => ' P&L: ' + fmt(ctx.raw) } } }, scales: { x: { display: false }, y: { display: false } } }
+  });
+}
+
+// ===== ADD TRADE =====
+function resetForm() {
+  document.getElementById('fTicker').value = '';
+  document.getElementById('fContracts').value = getPhase().contracts;
+  document.getElementById('fEntry').value = '';
+  document.getElementById('fExit').value = '';
+  document.getElementById('fSL').value = '';
+  document.getElementById('fDate').value = new Date().toISOString().split('T')[0];
+  document.getElementById('fNotes').value = '';
+  state.tradeType = 'CALL';
+  document.getElementById('btnCall').classList.add('active');
+  document.getElementById('btnPut').classList.remove('active');
+  document.getElementById('livePreview').style.display = 'none';
+}
+
+function setTradeType(t) {
+  state.tradeType = t;
+  document.getElementById('btnCall').classList.toggle('active', t === 'CALL');
+  document.getElementById('btnPut').classList.toggle('active', t === 'PUT');
+}
+
+// Live preview
+['fEntry', 'fExit', 'fContracts'].forEach(id => {
+  document.getElementById(id).addEventListener('input', updatePreview);
+});
+
+function updatePreview() {
+  const entry = parseFloat(document.getElementById('fEntry').value);
+  const exit = parseFloat(document.getElementById('fExit').value);
+  const cts = parseInt(document.getElementById('fContracts').value) || 0;
+  const preview = document.getElementById('livePreview');
+
+  if (!entry || !exit || !cts) { preview.style.display = 'none'; return; }
+  preview.style.display = 'block';
+
+  const pnlPerCt = (exit - entry) * 100;
+  const totalPnl = pnlPerCt * cts;
+  const pctReturn = ((exit - entry) / entry * 100);
+
+  document.getElementById('previewPnl').textContent = fmt(totalPnl);
+  document.getElementById('previewPnl').style.color = totalPnl >= 0 ? 'var(--green)' : 'var(--red)';
+  document.getElementById('previewPct').textContent = pctReturn.toFixed(1) + '%';
+  document.getElementById('previewPct').style.color = totalPnl >= 0 ? 'var(--green)' : 'var(--red)';
+
+  // Warnings
+  const warnings = [];
+  const phase = getPhase();
+  if (cts > phase.contracts) warnings.push(`&#9888; Over ${phase.contracts} contract limit!`);
+  if (entry * 100 > 300) warnings.push('&#9888; Entry over $300/contract!');
+  const lostPct = totalPnl < 0 ? Math.abs(pctReturn) : 0;
+  if (lostPct > state.slPct + 2) warnings.push(`&#9888; Loss (${lostPct.toFixed(1)}%) exceeds your ${state.slPct}% SL — did you hold through stop?`);
+  const tt = todayTrades();
+  if (tt.length >= state.maxTrades) warnings.push('&#9888; Already hit max trades today!');
+  document.getElementById('previewWarnings').innerHTML = warnings.map(w =>
+    `<div style="font-size:11px;color:var(--orange);margin-top:4px;">${w}</div>`
+  ).join('');
+}
+
+function saveTrade() {
+  const ticker = document.getElementById('fTicker').value.trim().toUpperCase();
+  const contracts = parseInt(document.getElementById('fContracts').value);
+  const entry = parseFloat(document.getElementById('fEntry').value);
+  const exit = parseFloat(document.getElementById('fExit').value);
+  const sl = parseFloat(document.getElementById('fSL').value) || 0;
+  const date = document.getElementById('fDate').value;
+  const notes = document.getElementById('fNotes').value.trim();
+
+  if (!ticker) { toast('Enter ticker'); return; }
+  if (!entry || entry <= 0) { toast('Enter entry price'); return; }
+  if (!exit || exit <= 0) { toast('Enter exit price'); return; }
+  if (!contracts || contracts <= 0) { toast('Enter contracts'); return; }
+  if (!date) { toast('Enter date'); return; }
+
+  const pnlPerCt = (exit - entry) * 100;
+  const pnl = pnlPerCt * contracts;
+  const pctReturn = ((exit - entry) / entry * 100);
+  const slPctActual = sl > 0 ? ((entry - sl) / entry * 100) : 0;
+  const lostPct = pnl < 0 ? Math.abs(pctReturn) : 0;
+  const slFollowedThisTrade = pnl >= 0 ? true : (sl > 0 && lostPct <= (state.slPct + 2));
+
+  state.trades.push({
+    id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+    ticker, type: state.tradeType, contracts, entry, exit,
+    slSet: sl, pnl, pctReturn, date, notes,
+    slFollowed: slFollowedThisTrade, slPctActual,
+    time: Date.now(),
+  });
+
+  save();
+  toast(`${pnl >= 0 ? '&#9989;' : '&#10060;'} ${ticker} ${fmt(pnl)} logged`);
+  showPage('dash');
+}
+
+// ===== HISTORY =====
+function renderHistory() {
+  const sorted = [...state.trades].sort((a, b) => b.date.localeCompare(a.date) || b.time - a.time);
+  const wins = state.trades.filter(t => t.pnl > 0).length;
+  const losses = state.trades.filter(t => t.pnl <= 0).length;
+  document.getElementById('totalTrades').textContent = state.trades.length + ' trades';
+  document.getElementById('historyStats').innerHTML = `
+    <div class="scard"><div class="sl">Wins</div><div class="sv" style="color:var(--green);">${wins}</div></div>
+    <div class="scard"><div class="sl">Losses</div><div class="sv" style="color:var(--red);">${losses}</div></div>
+    <div class="scard"><div class="sl">Total</div><div class="sv" style="color:${totalPnL()>=0?'var(--green)':'var(--red)'};">${fmt(totalPnL())}</div></div>
+  `;
+
+  if (sorted.length === 0) {
+    document.getElementById('tradeList').innerHTML = '<div class="empty">No trades logged yet.<br>Tap Log Trade to start.</div>';
+    return;
+  }
+
+  let lastDate = '';
+  document.getElementById('tradeList').innerHTML = sorted.map(t => {
+    let header = '';
+    if (t.date !== lastDate) {
+      lastDate = t.date;
+      const d = new Date(t.date);
+      header = `<div style="font-size:11px;color:var(--dim);padding:10px 0 4px;">${d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}</div>`;
+    }
+    return header + `<div class="trade-item" onclick="showTradeDetail('${t.id}')">
+      <div class="ti-side ${t.type.toLowerCase()}">${t.type}</div>
+      <div class="ti-info">
+        <div class="ti-ticker">${t.ticker}</div>
+        <div class="ti-meta">${t.contracts}ct · $${t.entry.toFixed(2)} → $${t.exit.toFixed(2)}</div>
+      </div>
+      <div class="ti-pnl">
+        <div class="pnl-val" style="color:${t.pnl>=0?'var(--green)':'var(--red)'};">${fmt(t.pnl)}</div>
+        <div class="pnl-pct" style="color:${t.pnl>=0?'var(--green)':'var(--red)'};">${t.pctReturn>=0?'+':''}${t.pctReturn.toFixed(1)}%</div>
+        <div class="ti-badges">
+          <span class="badge ${t.pnl>=0?'win':'loss'}">${t.pnl>=0?'WIN':'LOSS'}</span>
+          ${t.slSet > 0 ? `<span class="badge ${t.slFollowed?'sl-ok':'sl-broke'}">${t.slFollowed?'SL OK':'SL BROKE'}</span>` : ''}
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function showTradeDetail(id) {
+  const t = state.trades.find(x => x.id === id);
+  if (!t) return;
+  const d = new Date(t.date).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+  document.getElementById('detailContent').innerHTML = `
+    <div style="text-align:center;margin-bottom:16px;">
+      <div style="font-size:12px;color:var(--dim);">${d}</div>
+      <div style="font-size:24px;font-weight:700;margin:4px 0;">${t.ticker} <span style="color:${t.type==='CALL'?'var(--green)':'var(--red)'};">${t.type}</span></div>
+      <div style="font-size:32px;font-weight:800;color:${t.pnl>=0?'var(--green)':'var(--red)'};">${fmt(t.pnl)}</div>
+      <div style="font-size:14px;color:var(--dim);">${t.pctReturn>=0?'+':''}${t.pctReturn.toFixed(2)}%</div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+      <div class="scard"><div class="sl">Contracts</div><div class="sv">${t.contracts}</div></div>
+      <div class="scard"><div class="sl">Entry</div><div class="sv">$${t.entry.toFixed(2)}</div></div>
+      <div class="scard"><div class="sl">Exit</div><div class="sv">$${t.exit.toFixed(2)}</div></div>
+      <div class="scard"><div class="sl">SL Set At</div><div class="sv">${t.slSet > 0 ? '$' + t.slSet.toFixed(2) : 'None'}</div></div>
+      <div class="scard"><div class="sl">SL Followed?</div><div class="sv" style="color:${t.slFollowed?'var(--green)':'var(--red)'};">${t.slSet > 0 ? (t.slFollowed ? 'YES' : 'NO') : 'N/A'}</div></div>
+      <div class="scard"><div class="sl">P&L per ct</div><div class="sv">${fmt(t.pnl / t.contracts)}</div></div>
+    </div>
+    ${t.notes ? `<div style="margin-top:12px;padding:10px;background:var(--bg);border-radius:8px;font-size:12px;color:var(--dim);">${t.notes}</div>` : ''}
+  `;
+  document.getElementById('deleteTradeBtn').onclick = () => {
+    if (confirm('Delete this trade?')) {
+      state.trades = state.trades.filter(x => x.id !== id);
+      save(); closeModal(); renderAll(); toast('Deleted');
+    }
+  };
+  document.getElementById('detailModal').classList.add('open');
+}
+function closeModal() { document.getElementById('detailModal').classList.remove('open'); }
+document.getElementById('detailModal').addEventListener('click', e => { if (e.target.id === 'detailModal') closeModal(); });
+
+// ===== RULES =====
+function renderRules() {
+  const phase = getPhase();
+  document.getElementById('rulesContent').innerHTML = `
+    <div class="check-item"><div class="check-dot ok">1</div><b>Max ${phase.contracts} contracts per trade</b></div>
+    <div class="check-item"><div class="check-dot ok">2</div><b>Max ${state.maxTrades} trades per day</b></div>
+    <div class="check-item"><div class="check-dot ok">3</div><b>${state.slPct}% stop loss — set IMMEDIATELY on entry</b></div>
+    <div class="check-item"><div class="check-dot ok">4</div><b>${state.tpPct}% take profit — follow tip guy's exit</b></div>
+    <div class="check-item"><div class="check-dot ok">5</div><b>Contract price $100-$300 only</b></div>
+    <div class="check-item"><div class="check-dot ok">6</div><b>NEVER average down</b></div>
+    <div class="check-item"><div class="check-dot ok">7</div><b>2 losses = DONE for the day</b></div>
+  `;
+
+  document.getElementById('scaleTable').innerHTML = `
+    <tr><th>Recovered</th><th>Contracts</th><th>Max Daily Loss</th></tr>
+    <tr><td class="b">$0 - $1,000</td><td>2</td><td class="r">$160</td></tr>
+    <tr><td class="b">$1,000 - $3,000</td><td>3</td><td class="r">$200</td></tr>
+    <tr><td class="b">$3,000+</td><td>3</td><td class="r">$300</td></tr>
+  `;
+
+  document.getElementById('killSwitch').innerHTML = `
+    <div class="check-item"><div class="check-dot" style="background:var(--green);border-color:var(--green);color:#fff;">&#10003;</div>Day hit +$80? Consider stopping</div>
+    <div class="check-item"><div class="check-dot" style="background:var(--green);border-color:var(--green);color:#fff;">&#10003;</div>Day hit +$100? DONE. Walk away.</div>
+    <div class="check-item"><div class="check-dot" style="background:var(--red);border-color:var(--red);color:#fff;">&#10005;</div>2 losses in a row? DONE.</div>
+    <div class="check-item"><div class="check-dot" style="background:var(--red);border-color:var(--red);color:#fff;">&#10005;</div>Down $${state.maxDailyLoss} today? DONE. Close broker.</div>
+    <div class="check-item"><div class="check-dot" style="background:var(--red);border-color:var(--red);color:#fff;">&#10005;</div>Down $${state.maxWeeklyLoss} this week? No trading until Monday.</div>
+  `;
+
+  // Roadmap
+  const pnl = totalPnL();
+  const phase1Done = pnl >= 1000;
+  const phase2Done = pnl >= 3000;
+  const phase3Done = pnl >= state.lossToRecover;
+  document.getElementById('roadmap').innerHTML = `
+    <div class="check-item"><div class="check-dot ${phase1Done?'ok':''}" style="${!phase1Done?'border-color:var(--accent);':''}">${phase1Done?'✓':'1'}</div>Phase 1: Recover first $1,000 (2 contracts, build consistency)</div>
+    <div class="check-item"><div class="check-dot ${phase2Done?'ok':''}" style="${!phase2Done&&phase1Done?'border-color:var(--accent);':''}">${phase2Done?'✓':'2'}</div>Phase 2: Reach $3,000 recovered (scale to 3 contracts)</div>
+    <div class="check-item"><div class="check-dot ${phase3Done?'ok':''}" style="${!phase3Done&&phase2Done?'border-color:var(--accent);':''}">${phase3Done?'✓':'3'}</div>Phase 3: Full $${state.lossToRecover.toLocaleString()} recovery</div>
+  `;
+
+  // Settings
+  document.getElementById('settingsContent').innerHTML = `
+    <div style="display:flex;flex-direction:column;gap:8px;">
+      ${[
+        ['Loss to Recover', 'lossToRecover', state.lossToRecover],
+        ['Max Trades/Day', 'maxTrades', state.maxTrades],
+        ['Stop Loss %', 'slPct', state.slPct],
+        ['Take Profit %', 'tpPct', state.tpPct],
+        ['Max Daily Loss $', 'maxDailyLoss', state.maxDailyLoss],
+        ['Max Weekly Loss $', 'maxWeeklyLoss', state.maxWeeklyLoss],
+      ].map(([label, key, val]) => `
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border);">
+          <span style="font-size:13px;">${label}</span>
+          <button onclick="editSetting('${key}')" style="background:var(--bg);border:1px solid var(--border);color:var(--accent2);padding:4px 12px;border-radius:6px;font-size:13px;cursor:pointer;">${typeof val==='number'&&key.includes('Loss')||key==='lossToRecover'?'$':''}${val}${key.includes('Pct')?'%':''}</button>
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
+function editSetting(key) {
+  const labels = { lossToRecover:'Loss to recover ($)', maxTrades:'Max trades per day', slPct:'Stop loss %', tpPct:'Take profit %', maxDailyLoss:'Max daily loss ($)', maxWeeklyLoss:'Max weekly loss ($)' };
+  const val = prompt(labels[key] + ':', state[key]);
+  if (val && !isNaN(val) && +val > 0) { state[key] = +val; save(); renderAll(); toast('Updated'); }
+}
+
+function toast(msg) { const t = document.getElementById('toast'); t.innerHTML = msg; t.classList.add('show'); setTimeout(() => t.classList.remove('show'), 2500); }
+
+load();
+renderAll();
+</script>
+</body>
+</html>
